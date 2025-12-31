@@ -10,8 +10,9 @@ async function sendTelegramMessage(message) {
   return new Promise((resolve) => {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
     const data = JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: 'HTML' });
-    const options = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    const options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } };
     const req = https.request(url, options, (res) => {
+      res.on('data', () => {});
       res.on('end', () => resolve());
     });
     req.on('error', () => resolve());
@@ -21,26 +22,71 @@ async function sendTelegramMessage(message) {
 }
 
 (async () => {
+  const GREATHOST_URL = "https://greathost.es";
+  const LOGIN_URL = `${GREATHOST_URL}/login`;
+  const HOME_URL = `${GREATHOST_URL}/dashboard`;
+
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
 
   try {
-    // 1. 登录
-    await page.goto("https://greathost.es/login", { waitUntil: "networkidle" });
+    // === 1. 登录 ===
+    console.log("🔑 打开登录页：", LOGIN_URL);
+    await page.goto(LOGIN_URL, { waitUntil: "networkidle" });
     await page.fill('input[name="email"]', EMAIL);
     await page.fill('input[name="password"]', PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForNavigation({ waitUntil: "networkidle" });
+    await Promise.all([
+      page.click('button[type="submit"]'),
+      page.waitForNavigation({ waitUntil: "networkidle" }),
+    ]);
+    console.log("✅ 登录成功！");
+    await page.waitForTimeout(2000);
 
-    // 2. 进入详情页并提取 Server ID
-    await page.locator('.btn-billing-compact').first().click();
-    await page.waitForNavigation({ waitUntil: "networkidle" });
-    await page.getByRole('link', { name: 'View Details' }).first().click();
-    await page.waitForNavigation({ waitUntil: "networkidle" });
+    // === 2. 状态检查与自动开机 ===
+    console.log("📊 检查服务器实时状态...");
+    const statusText = await page.locator('.server-status, #server-status-detail, .status-badge').first().textContent().catch(() => 'unknown');
+    const statusLower = statusText.toLowerCase();
+    
+    let serverStarted = false;
+    if (statusLower.includes('offline') || statusLower.includes('stop') || statusLower.includes('离线')) {
+      console.log("⚡ 服务器离线，尝试启动...");
+      const startBtn = page.locator('.server-actions button, .server-main-action button').first(); 
+      await startBtn.click();
+      await page.waitForTimeout(3000); 
+      serverStarted = true;
+      console.log("✅ 启动命令已发送");
+    }
 
+    // === 3. 点击 Billing 图标进入账单页 ===
+    console.log("🔍 点击 Billing 图标...");
+    const billingBtn = page.locator('.btn-billing-compact').first();
+    const href = await billingBtn.getAttribute('href');
+ 
+
+    await Promise.all([
+      billingBtn.click(),
+      page.waitForNavigation({ waitUntil: "networkidle" })
+    ]);
+    
+    console.log("⏳ 已进入 Billing，等待3秒...");
+    await page.waitForTimeout(3000);
+
+    // === 4. 点击 View Details 进入详情页 ===
+    console.log("🔍 点击 View Details...");
+    await Promise.all([
+      page.getByRole('link', { name: 'View Details' }).first().click(),
+      page.waitForNavigation({ waitUntil: "networkidle" })
+    ]);
+    
+    console.log("⏳ 已进入详情页，等待3秒...");
+    await page.waitForTimeout(3000);
+
+       // 提前提取 ID，防止页面跳转后丢失上下文
     const serverId = page.url().split('/').pop() || 'unknown';
+    console.log(`🆔 解析到 Server ID: ${serverId}`);
 
-    // 3. 等待异步数据加载 (直到 accumulated-time 有数字)
+    
+// 3. 等待异步数据加载 (直到 accumulated-time 有数字)
     const timeSelector = '#accumulated-time';
     await page.waitForFunction(sel => {
       const el = document.querySelector(sel);
