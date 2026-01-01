@@ -151,7 +151,9 @@ async function sendTelegramMessage(message) {
             // 检查页面上是否弹出了这个错误文本（通常是红色提示框）
     const errorMsg = await page.locator('.toast-error, .alert-danger').textContent().catch(() => '');
     const isMaxedOut = errorMsg.includes('5 días') || beforeHours >= 120;
-    await page.reload({ waitUntil: "networkidle" });
+    //await page.reload({ waitUntil: "networkidle" });
+    // 即使刷新超时，也继续执行后续逻辑，尝试读取时间
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => console.log("⚠️ 页面刷新超时，尝试直接读取数据..."));
     
     // === 12. 再次等待数据刷新 ===
     await page.waitForFunction(sel => {
