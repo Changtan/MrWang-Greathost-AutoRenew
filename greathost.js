@@ -195,7 +195,7 @@ async function sendTelegramMessage(message) {
     }  
   } catch (err) {
     console.error(" ❌ 运行时错误 ❌ :", err.message);
-    await sendTelegramMessage(` 🚨 <b>GreatHost 脚本报错</b>\n<code>${err.message}</code> 🚨 `);
+    await sendTelegramMessage(` 🚨 <b>GreatHost 脚本报错</b> 🚨 \n<code>${err.message}</code>`);
   } finally {
     await browser.close();
   }
