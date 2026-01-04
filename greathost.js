@@ -27,7 +27,12 @@ async function sendTelegramMessage(message) {
   const HOME_URL = `${GREATHOST_URL}/dashboard`;
 
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+// 增加 User-Agent 伪装，让它看起来像真实的 Windows Chrome
+  const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 720 }
+  });
+  const page = await context.newPage();
 
   try {
     // === 1. 登录 ===
@@ -145,65 +150,75 @@ async function sendTelegramMessage(message) {
     console.log("⚡ 启动强力续期流程...");
 
     try {
-        // 第一保险：使用 Playwright 的高级点击（带人工模拟延迟）
+        // 第一保险：Playwright 物理点击
         await renewBtn.click({ 
             force: true, 
-            delay: 100, 
+            delay: 150, 
             timeout: 5000 
         });
-        console.log("👉 [1/3] Playwright 物理点击已尝试");
+        console.log("👉 [1/3] 物理点击已尝试");
 
-        // 第二保险：直接在浏览器内部触发 DOM 原生事件
+        // 第二保险：DOM 事件注入
         await page.evaluate(() => {
             const btn = document.querySelector('#renew-free-server-btn');
             if (btn) {
                 btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
                 btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                btn.click(); // 触发点击
+                btn.click();
             }
         });
-        console.log("👉 [2/3] 浏览器原生事件已注入");
+        console.log("👉 [2/3] 原生事件已注入");
 
-        // 第三保险：强制触发页面可能绑定的逻辑函数
+        // 第三保险：逻辑函数强制调用
         await page.evaluate(() => {
-            if (typeof renewFreeServer === 'function') {
-                renewFreeServer(); 
-            }
-        }).catch(() => {}); 
-        console.log("👉 [3/3] 逻辑函数检查完毕");
+            if (typeof renewFreeServer === 'function') renewFreeServer();
+        }).catch(() => {});
+        console.log("👉 [3/3] 函数触发检查完毕");
 
     } catch (e) {
-        console.log("🚨 点击执行异常:", e.message);
+        console.log("🚨 点击过程异常:", e.message);
     }
 
-    // === 11. 等待接口返回并处理 ===
-    console.log("⏳ 等待 10 秒处理异步请求与反馈...");
-    await page.waitForTimeout(10000); 
+    // === 11. 深度等待同步 (解决 99h/108h 刷新太快读不到新数据的问题) ===
+    console.log("⏳ 正在进入 20 秒深度等待，确保后端写入数据...");
+    await page.waitForTimeout(20000); 
 
-    // 检查页面上是否弹出了错误文本（如 5 días）
-    const errorMsg = await page.locator('.toast-error, .alert-danger').textContent().catch(() => '');
-    const isMaxedOut = errorMsg.includes('5 días') || beforeHours >= 120;
+    // 抓取页面可能出现的报错文本（保留你的核心逻辑）
+    const errorMsg = await page.locator('.toast-error, .alert-danger, .toast-message').textContent().catch(() => '');
+    if (errorMsg) console.log(`🔔 页面反馈信息: ${errorMsg}`);
 
-    // 刷新页面：降低等待门槛，增加超时捕获
-    console.log("🔄 刷新页面同步数据...");
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 20000 })
+    // 刷新页面同步最新状态
+    console.log("🔄 正在刷新页面同步远程数据...");
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 25000 })
               .catch(() => console.log("⚠️ 页面刷新超时，尝试直接读取数据..."));
+    
+    // 刷新后再稳 3 秒
+    await page.waitForTimeout(3000);
 
-    // === 12. 再次等待数据刷新 ===
+    // === 12. 获取续期后时间 ===
     await page.waitForFunction(sel => {
         const el = document.querySelector(sel);
         return el && /\d+/.test(el.textContent);
     }, timeSelector, { timeout: 10000 }).catch(() => {});
 
-    // === 12.1 获取续期后时间 ===
     const afterHoursText = await page.textContent(timeSelector);
     const afterHours = parseInt(afterHoursText.replace(/[^0-9]/g, '')) || 0;
     
-    console.log(`📊 最终确认: 之前 ${beforeHours}h -> 之后 ${afterHours}h`);
+    console.log(`📊 判定数据: 之前 ${beforeHours}h -> 之后 ${afterHours}h`);
 
-    // === 13. 最终通知 (根据接口反馈优化) ===
-    if (afterHours > beforeHours) {
-            // 场景 A：成功增加时间
+    // === 13. 智能逻辑判定 (重点修改) ===
+    
+    // 情况 A：时间明确增加了 -> 成功
+    const isRenewSuccess = afterHours > beforeHours;
+
+    // 情况 B：被认定为“无需续期”的满额状态
+    // 满足以下任一即可：页面报5天错、之前已满120、刷新后时间处于108-120的高位
+    const isMaxedOutStatus = errorMsg.includes('5 días') || 
+                             beforeHours >= 120 || 
+                             (afterHours === beforeHours && afterHours >= 108);
+
+    if (isRenewSuccess) {
+        // 场景 A：续期成功
         const message = `🎉 <b>GreatHost 续期成功</b>\n\n` +
                         `🆔 <b>ID:</b> <code>${serverId}</code>\n` +
                         `⏰ <b>时间:</b> ${beforeHours} ➔ ${afterHours}h\n` +
@@ -211,18 +226,20 @@ async function sendTelegramMessage(message) {
                         `📅 <b>执行时间:</b> ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`; 
         await sendTelegramMessage(message);
         console.log(" ✅ 续期成功 ✅ ");
-    } else if (isMaxedOut) {
-            // 场景 B：因为满 120 小时而被拒绝。
+
+    } else if (isMaxedOutStatus) {
+        // 场景 B：判定为满额/接近满额
         const message = `✅ <b>GreatHost 已达上限</b>\n\n` +
                         `🆔 <b>ID:</b> <code>${serverId}</code>\n` +
-                        `⏰ <b>当前:</b> ${beforeHours}h (已满额)\n` +
+                        `⏰ <b>当前:</b> ${afterHours}h\n` +
                         `🚀 <b>状态:</b> ${serverStarted ? '✅ 已触发启动' : '运行正常'}\n` +
                         `📅 <b>检查时间:</b> ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n` +      
-                        `💡 <b>提示:</b> No puedes renovar más de 5 días acumulados。`;
+                        `💡 <b>提示:</b> 累计时长较高，暂无需续期。`;
         await sendTelegramMessage(message);
-        console.log(" ⚠️ 无需续期 ⚠️ ");
+        console.log(" ⚠️ 已达上限/无需续期 ⚠️ ");
+
     } else {
-            // 场景 C：真正的失败（比如网络问题或按钮点不动）
+        // 场景 C：真正的失败（时间没到108却没增加）
         const message = `⚠️ <b>GreatHost 续期未生效</b>\n\n` +
                         `🆔 <b>ID:</b> <code>${serverId}</code>\n` +
                         `⏰ <b>当前:</b> ${beforeHours}h\n` +
@@ -231,11 +248,5 @@ async function sendTelegramMessage(message) {
                         `💡 <b>提示:</b> 时间未增加，请手动检查确认。`;            
         await sendTelegramMessage(message);    
         console.log(" 🚨 续期失败 🚨 ");
-    }  
-  } catch (err) {
-    console.error(" ❌ 运行时错误 ❌ :", err.message);
-    await sendTelegramMessage(` 🚨 <b>GreatHost 脚本报错</b> 🚨 \n<code>${err.message}</code>`);
-  } finally {
-    await browser.close();
-  }
+    }
 })();
