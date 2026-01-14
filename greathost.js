@@ -262,14 +262,41 @@ async function sendTelegramMessage(message) {
     // 刷新后再稳 3 秒
     await page.waitForTimeout(3000);
 
-    // === 12. 获取续期后时间 ===
-    await page.waitForFunction(sel => {
-        const el = document.querySelector(sel);
-        return el && /\d+/.test(el.textContent);
-    }, timeSelector, { timeout: 10000 }).catch(() => {});
+// === 12. 获取续期后时间 (增强容错版) ===
+    let afterHours = 0;
+    try {
+        console.log("⏳ 正在等待数据渲染...");
+        
+        // 1. 等待条件优化：文字中必须包含数字，且不只是孤零零的 "0" (除非之前就是0)
+        await page.waitForFunction((sel, pre) => {
+            const el = document.querySelector(sel);
+            if (!el) return false;
+            const current = parseInt(el.textContent.replace(/[^0-9]/g, ''));
+            // 只有当获取到有效数字，且 (数字发生了变化 或 数字大于0) 时才通过
+            return !isNaN(current) && (current > 0 || current !== pre);
+        }, timeSelector, beforeHours, { timeout: 15000 });
 
-    const afterHoursText = await page.textContent(timeSelector);
-    const afterHours = parseInt(afterHoursText.replace(/[^0-9]/g, '')) || 0;
+        // 2. 提取数字
+        const afterHoursText = await page.textContent(timeSelector);
+        afterHours = parseInt(afterHoursText.replace(/[^0-9]/g, '')) || 0;
+
+        // 3. 深度补救：如果读到 0 但之前大于 0，说明页面渲染还没到位，再等 3 秒重读一次
+        if (afterHours === 0 && beforeHours > 0) {
+            console.log("⚠️ 检测到异常 0h，尝试二次重读...");
+            await page.waitForTimeout(3000);
+            const retryText = await page.textContent(timeSelector);
+            afterHours = parseInt(retryText.replace(/[^0-9]/g, '')) || 0;
+        }
+        
+    } catch (e) {
+        console.log("⚠️ 数据同步超时，将使用刷新前的时间进行判定。");
+        afterHours = beforeHours; // 超时补救：至少保证不会显示为 0h
+    }
+
+    // 最终安全检查：如果 afterHours 依然为 0，强制兜底防止误报
+    if (afterHours === 0 && beforeHours > 0) {
+        afterHours = beforeHours;
+    }
     
     console.log(`📊 判定数据: 之前 ${beforeHours}h -> 之后 ${afterHours}h`);
 
