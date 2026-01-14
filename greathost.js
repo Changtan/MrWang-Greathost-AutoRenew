@@ -2,7 +2,8 @@ const EMAIL = process.env.GREATHOST_EMAIL || '';
 const PASSWORD = process.env.GREATHOST_PASSWORD || '';
 const CHAT_ID = process.env.CHAT_ID || '';
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
-
+  // === sock5代理配置固定IP用 (如果不需要代理，留空) ===
+const RAW_PROXY = (process.env.PROXY_URL || "").trim();
 
 const { chromium } = require("playwright");
 const https = require('https');
@@ -28,8 +29,6 @@ async function sendTelegramMessage(message) {
   const HOME_URL = `${GREATHOST_URL}/dashboard`;
 
 // --- 修改开始：仅支持 SOCKS5 代理启动 ---
-  // === sock5代理配置固定IP用 (如果不需要代理，留空) ===
-const RAW_PROXY = (process.env.PROXY_URL || "").trim();
 const launchOptions = { 
   headless: true,
   args: ['--no-sandbox'] 
