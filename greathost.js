@@ -327,6 +327,7 @@ async function sendTelegramMessage(message) {
                                 `📅 <b>时间:</b> ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`;
             await sendTelegramMessage(errorDetail);
         }
+      } 
     } finally {    
     if (browser) {
         console.log("🧹 [Exit] 正在关闭浏览器...");
