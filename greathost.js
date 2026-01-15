@@ -31,58 +31,37 @@ async function sendTelegramMessage(message) {
 }
 
 (async () => {
-    // === 变量定义（完整保留） ===
+    // === 目标 URL 变量 ===
     const GREATHOST_URL = "https://greathost.es";    
     const LOGIN_URL = `${GREATHOST_URL}/login`;
     const HOME_URL = `${GREATHOST_URL}/dashboard`;
     const BILLING_URL = `${GREATHOST_URL}/billing/free-servers`;
     
-    let proxyStatusTag = "🌐 直连模式";
+    let proxyStatusTag = PROXY_URL ? `🔒 代理模式 (通过环境注入)` : "🌐 直连模式";
     let serverStarted = false;
-
-    // 1. 代理解析与标准化
-    let proxyData = null;
-    if (PROXY_URL) {
-        try {
-            const cleanUrl = PROXY_URL.replace(/^socks5:\/\/|^http:\/\/|^https:\/\//, '');
-            proxyData = new URL(`socks5://${cleanUrl}`);
-            proxyStatusTag = `🔒 代理模式 (${proxyData.host})`;
-        } catch (e) {
-            console.error("❌ PROXY_URL 格式解析错误:", e.message);
-        }
-    }
-
-    // ... 前面解析 proxyData 的代码保持不变 ...
 
     let browser;
     try {
         console.log(`🚀 任务启动 | 引擎: Firefox | ${proxyStatusTag}`);
         
-        // 核心修改：完全不传 proxy 参数，防止 Playwright 报错
-        browser = await firefox.launch({ 
-            headless: true 
-        });
+        // 1. 启动浏览器 - 这里完全不传 proxy 参数，防止 Playwright 报错
+        // 代理将由 YAML 中的 ALL_PROXY 环境变量在系统层处理
+        browser = await firefox.launch({ headless: true });
 
-        const context = await browser.newContext({
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
-            viewport: { width: 1280, height: 720 },
-            locale: 'es-ES'
-        });
-        
-        // ... 其余逻辑不变 ...
-        
-        browser = await firefox.launch(launchOptions);
-
-        // 2. 核心修改：newContext 里面【绝对不要】再写 proxy 属性
+        // 2. 创建上下文 - 确保这里只有这一处声明
         const context = await browser.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
             viewport: { width: 1280, height: 720 },
             locale: 'es-ES'
         });
 
+        // 3. 创建页面
         const page = await context.newPage();
-        
-        // ... 后面的逻辑保持不变 ...
+
+        // --- 抹除特征 ---
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        });
 
         // 4. Firefox 专属伪装（移除所有 Chrome 特征，确保持一致性）
         await page.addInitScript(() => {
