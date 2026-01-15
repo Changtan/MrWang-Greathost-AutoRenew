@@ -19,6 +19,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ""
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or ""
 # 代理配置 (使用 Selenium-Wire 解决 SOCKS5 认证)
 PROXY_URL = "socks5://admin123:admin321@138.68.253.225:30792"
+PROXY_UR = os.getenv("PROXY_UR") or ""
 
 def send_telegram(message):
     """复刻 JS: sendTelegramMessage"""
@@ -50,6 +51,16 @@ def run_task():
     try:
         driver = get_browser()
         wait = WebDriverWait(driver, 20)
+
+        # === 代理出口 IP 检测日记 ===
+        print("🌍 [Step 1] 检测代理出口 IP...")
+        try:
+            driver.get("https://api.ipify.org?format=json")
+            ip_info = json.loads(driver.find_element(By.TAG_NAME, "body").text)
+            print(f"✅ 当前出口 IP: {ip_info['ip']}")
+        except:
+            print("⚠️ IP 检测跳过（不影响主流程）")
+        # ================================
         
         # 0. 登录流程
         print("🔑 正在执行登录...")
