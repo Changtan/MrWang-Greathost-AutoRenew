@@ -58,15 +58,18 @@ async function sendTelegramMessage(message) {
     try {
         console.log(`🚀 任务启动 | 引擎: Firefox | ${proxyStatusTag}`);
         
-        // 1. 核心修改：在 launch 阶段直接把 server, username, password 传进去
-        const launchOptions = { headless: true };
-        if (proxyData) {
-            launchOptions.proxy = {
-                server: `socks5://${proxyData.host}`,
-                username: proxyData.username,
-                password: proxyData.password
-            };
-        }
+        // 核心修改：完全不传 proxy 参数，防止 Playwright 报错
+        browser = await firefox.launch({ 
+            headless: true 
+        });
+
+        const context = await browser.newContext({
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+            viewport: { width: 1280, height: 720 },
+            locale: 'es-ES'
+        });
+        
+        // ... 其余逻辑不变 ...
         
         browser = await firefox.launch(launchOptions);
 
