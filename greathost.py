@@ -18,7 +18,7 @@ PASSWORD = os.getenv("GREATHOST_PASSWORD") or ""
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ""
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or ""
 # sock5代码，不需要留空值 62行要填上IP头
-PROXY_URL = os.getenv("PROXY_UR") or ""
+PROXY_URL = os.getenv("PROXY_URL") or ""
 
 def send_telegram(msg_type_or_text, error_msg=None):    
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: return
