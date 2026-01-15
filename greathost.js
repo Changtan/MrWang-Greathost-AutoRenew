@@ -30,45 +30,42 @@ async function sendTelegramMessage(message) {
 
     let proxyStatusTag = "🌐 直连模式";
 
-    // --- 修改开始：SOCKS5 最终修正版 ---
+    // --- 修改开始：Playwright 兼容性最高的 SOCKS5 写法 ---
     const launchOptions = { headless: true, args: ['--no-sandbox'] };
-    
-    let proxyHostDisplay = "";
+    let proxyData = null;
 
     if (PROXY_URL) {
         try {
-            // 1. 强制补全协议头，防止 new URL 报错
             const rawUrl = PROXY_URL.startsWith('socks') ? PROXY_URL : `socks5://${PROXY_URL}`;
-            const urlObj = new URL(rawUrl);
-
-            // 2. 核心修复：Chromium SOCKS5 必须把账号密码放在 server 字符串里
-            // 格式必须是: socks5://username:password@ip:port
-            const finalProxyUrl = `socks5://${urlObj.username}:${urlObj.password}@${urlObj.host}`;
+            proxyData = new URL(rawUrl);
             
+            // 核心改动 1：启动浏览器时，server 字符串【不要】包含账号密码
             launchOptions.proxy = { 
-                server: finalProxyUrl 
-                // ❌ 绝对不要在这里写 username 和 password，否则会报错
+                server: `socks5://${proxyData.host}` 
             };
-
-            proxyHostDisplay = urlObj.host; // 仅用于日志显示
-            proxyStatusTag = `🔒 代理模式 (${proxyHostDisplay})`;
-            console.log(`🌍 [Config] 代理配置已构建: socks5://***:***@${urlObj.host}`);
-
+            proxyStatusTag = `🔒 代理模式 (${proxyData.host})`;
         } catch (e) {
-            console.error("❌ PROXY_URL 解析严重错误:", e.message);
+            console.error("❌ PROXY_URL 解析失败:", e.message);
         }
     }
 
     const browser = await chromium.launch(launchOptions);
 
-    // 3. 上下文配置 (不再传入任何 proxy 参数，自动继承 launch 配置)
+    // 核心改动 2：在创建上下文时，单独通过 username 和 password 字段传值
+    // 这会触发 Playwright 的内部拦截机制来处理 SOCKS5 认证，而不是交给浏览器内核
     const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         viewport: { width: 1280, height: 720 },
-        locale: 'es-ES'
+        locale: 'es-ES',
+        proxy: proxyData ? {
+            server: `socks5://${proxyData.host}`,
+            username: proxyData.username,
+            password: proxyData.password
+        } : undefined
     });
 
     const page = await context.newPage();
+    // --- 修改结束 ---
     
       
   try {
