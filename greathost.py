@@ -167,7 +167,7 @@ def run_task():
             wait_time = re.search(r'\d+', btn_content).group(0) or "??"
             message = (f"⏳ <b>GreatHost 还在冷却中</b>\n\n"
                        f"🆔 <b>服务器ID:</b> <code>{server_id}</code>\n"
-                       f"⏰ <b>剩余时间:</b> {wait_time} 分钟\n"
+                       f"⏰ <b>冷却时间:</b> {wait_time} 分钟\n"
                        f"📊 <b>当前累计:</b> {before_hours}h\n"
                        f"🚀 <b>服务器状态:</b> {'✅ 已触发启动' if server_started else '运行中'}\n"
                        f"📅 <b>检查时间:</b> {get_now_shanghai()}")
@@ -247,8 +247,8 @@ def run_task():
         elif is_maxed_out:
             message = (f"✅ <b>GreatHost 已达上限</b>\n\n"
                        f"🆔 <b>ID:</b> <code>{server_id}</code>\n"
-                       f"⏰ <b>当前:</b> {after_hours}h\n"
-                       f"🚀 <b>状态:</b> {'✅ 已触发启动' if server_started else '运行正常'}\n"
+                       f"⏰ <b>剩余时间:</b> {after_hours}h\n"
+                       f"🚀 <b>服务器状态:</b> {'✅ 已触发启动' if server_started else '运行正常'}\n"
                        f"📅 <b>检查时间:</b> {get_now_shanghai()}\n"
                        f"💡 <b>提示:</b> 累计时长较高，暂无需续期。")
             send_telegram(message)
@@ -257,7 +257,7 @@ def run_task():
         else:
             message = (f"⚠️ <b>GreatHost 续期未生效</b>\n\n"
                        f"🆔 <b>ID:</b> <code>{server_id}</code>\n"
-                       f"⏰ <b>当前:</b> {before_hours}h\n"
+                       f"⏰ <b>剩余时间:</b> {before_hours}h\n"
                        f"🚀 <b>服务器状态:</b> {'✅ 已触发启动' if server_started else '运行中'}\n"
                        f"📅 <b>检查时间:</b> {get_now_shanghai()}\n"
                        f"💡 <b>提示:</b> 时间未增加，请手动检查确认。")
