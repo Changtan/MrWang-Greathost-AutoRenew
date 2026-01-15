@@ -259,8 +259,8 @@ def run_task():
             wait.until(lambda d: re.search(r'\d+', d.find_element(By.CSS_SELECTOR, time_selector).text))
         except: pass
         after_hours_text = driver.find_element(By.CSS_SELECTOR, time_selector).text
-        digits = re.sub(r'[^0-9]', '', before_hours_text or '')
-        before_hours = int(digits) if digits else 0
+        digits_after = re.sub(r'[^0-9]', '', after_hours_text or '') 
+        after_hours = int(digits_after) if digits_after else 0
         
         print(f"📊 判定数据: 之前 {before_hours}h -> 之后 {after_hours}h")
 
