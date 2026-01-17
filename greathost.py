@@ -264,7 +264,6 @@ def run_task():
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", billing_btn)
             time.sleep(random.uniform(1, 2))
             
-            # 产生一个 -5 到 +5 像素的随机偏移量
             offset_x = random.randint(-5, 5) 
             offset_y = random.randint(-5, 5)
             
@@ -273,9 +272,15 @@ def run_task():
             print(f"✅ 已点击 Billing (坐标偏移: {offset_x}, {offset_y})，等待3秒...")
             time.sleep(3)
         except Exception as e:
-            print(f"❌ 定位 Billing 失败，执行备用 JS 点击: {e}")
-            driver.execute_script("document.querySelector('.btn-billing-compact').click();")
-            time.sleep(3)
+            print(f"⚠️ 模拟点击失败，尝试 safe_click 兜底: {e}")
+            try:
+                safe_click(driver, billing_btn) 
+                print("✅ safe_click 成功触发 Billing")
+                time.sleep(3)
+            except:
+                print("❌ 所有点击手段均失效，尝试最后 JS 强制跳转")
+                driver.execute_script("document.querySelector('.btn-billing-compact').click();")
+                time.sleep(3)
 
         # === 4. 点击 View Details 进入详情页 (增加稳健性) ===
         print("🔍 正在定位 View Details 链接...")
