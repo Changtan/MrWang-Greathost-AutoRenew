@@ -18,7 +18,7 @@ EMAIL = os.getenv("GREATHOST_EMAIL") or ""
 PASSWORD = os.getenv("GREATHOST_PASSWORD") or ""
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ""
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or ""
-# sock5代码，不需要留空值 62行左右要填上IP头
+# sock5代码，不需要留空值 70行左右要填上IP头
 PROXY_URL = os.getenv("PROXY_URL") or ""
 
 def send_telegram(msg_text):
@@ -48,32 +48,53 @@ def get_now_shanghai():
 
 
 def check_proxy_ip(driver):
-    """优化后的代理检测：先尝试轻量级连接检测"""
+    """
+    优化后的代理检测：
+    1. 使用 Requests 预检以节省资源
+    2. 增加 IP 段强制校验 (138.68)
+    3. 特殊字符替换防止 TG 发送失败
+    """
     if not PROXY_URL.strip():
+        print("🌍 [Check] 未设置代理，跳过预检。")
         return True
 
     print("🌍 [Check] 正在通过 Requests 预检代理...")
     proxy_dict = {"http": PROXY_URL, "https": PROXY_URL}
+    
     try:
-        # 预检：如果 requests 都连不上，直接判定代理失效
+        # 1. 基础连接检测
         resp = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=10)
         current_ip = resp.json().get('ip')
         print(f"✅ 代理预检成功，当前 IP: {current_ip}")
-    except Exception as e:
-        error_info = f"代理物理连接失败: {e}"
-        print(f"❌ {error_info}")
-        send_telegram(f"🚨 <b>代理检查失败 (预检)</b>\n<code>{error_info}</code>")
+
+        # 2. IP 段强制校验
+        if not current_ip.startswith("138.68"):
+            error_info = f"IP 地址({current_ip})不符合预期段(138.68)，疑似代理未生效！"
+            print(f"⚠️ {error_info}")
+            send_telegram(f"🚨 <b>IP 校验失败</b>\n<code>{error_info}</code>")
+            raise Exception(error_info)
+
+    except Exception as e:        
+        clean_error = str(e).replace('<', '[').replace('>', ']')
+        error_info = f"代理预检或校验失败: {clean_error}"
+        
+        print(f"❌ {error_info}")        
+        if "IP 校验失败" not in error_info:
+            send_telegram(f"🚨 <b>代理检查失败 (预检)</b>\n<code>{error_info}</code>")
         raise Exception(error_info)
 
-    # 预检通过后再让浏览器访问，减少浏览器超时的概率
+    # 3. 浏览器层面的最终确认
     try:
-        driver.set_page_load_timeout(30) # 增加超时时间
+        print("🌍 [Check] 正在通过浏览器确认代理响应...")
+        driver.set_page_load_timeout(30)
         driver.get("https://api.ipify.org?format=json")
         return True
     except Exception as e:
-        error_info = f"浏览器访问代理超时: {e}"
+        clean_error = str(e).replace('<', '[').replace('>', ']')
+        error_info = f"浏览器访问代理超时: {clean_error}"
+        print(f"❌ {error_info}")
         send_telegram(f"🚨 <b>代理检查失败 (浏览器)</b>\n<code>{error_info}</code>")
-        raise Exception(error_info)        
+        raise Exception(error_info)     
 
 def get_browser():
     sw_options = {'proxy': {'http': PROXY_URL, 'https': PROXY_URL, 'no_proxy': 'localhost,127.0.0.1'}}
