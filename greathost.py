@@ -37,6 +37,14 @@ def send_telegram(msg_type_or_text, error_msg=None):
     except Exception as e: 
         print(f"Telegram 发送失败: {e}")
 
+STATUS_MAP = {
+    "Running":   ["🟢", "运行中"],
+    "Starting":  ["🟡", "启动中"],
+    "Stopped":   ["🔴", "已关机"],
+    "Offline":   ["⚪", "离线"],
+    "Suspended": ["🚫", "已暂停/封禁"]
+}
+
 def get_now_shanghai():
     return datetime.now(ZoneInfo("Asia/Shanghai")).strftime('%Y/%m/%d %H:%M:%S')
 
@@ -246,11 +254,20 @@ def run_task():
 
         if 'Wait' in btn_content:
             wait_time = re.search(r'\d+', btn_content).group(0) or "??"
-            message = (f"⏳ <b>GreatHost 还在冷却中</b>\n\n"
+            
+            # 直接使用全局变量 STATUS_MAP
+            icon, name = STATUS_MAP.get(status_text, ["⚪", status_text])
+            
+            if server_started:
+                status_display = f"✅ 已触发启动 ({icon} {name})"
+            else:
+                status_display = f"{icon} 运行正常"
+
+            message = (f"⏳ <b>GreatHost 还在冷却中</b>\n\n"                       
                        f"🆔 <b>服务器ID:</b> <code>{server_id}</code>\n"
                        f"⏰ <b>冷却时间:</b> {wait_time} 分钟\n"
                        f"📊 <b>当前累计:</b> {before_hours}h\n"
-                       f"🚀 <b>服务器状态:</b> {'✅ 已触发启动' if server_started else '运行中'}\n"
+                       f"🚀 <b>服务器状态:</b> {status_display}\n"
                        f"📅 <b>检查时间:</b> {get_now_shanghai()}")
             send_telegram(message)
             return
@@ -334,25 +351,17 @@ def run_task():
         is_renew_success = after_hours > before_hours
         is_maxed_out = ("5 días" in error_msg) or (before_hours >= 120) or (after_hours == before_hours and after_hours >= 108)
 
-        # 🚀 [新增逻辑] 状态与 Emoji 映射，同步小圆点颜色
-        status_map = {
-            "Running":   ["🟢", "运行中"],
-            "Starting":  ["🟡", "启动中"],
-            "Stopped":   ["🔴", "已关机"],
-            "Offline":   ["⚪", "离线"],
-            "Suspended": ["🚫", "已暂停/封禁"]
-        }
-        
-        # 构造统一的状态显示文案
+        # 🚀 统一构造服务器状态显示文案 (使用全局 STATUS_MAP)
         if server_started:
-            # 如果触发过启动，使用第 13 步抓取的 final_status_text 进行映射
-            icon, name = status_map.get(final_status_text, ["❓", final_status_text])
+            # 使用折返抓取的实时状态
+            icon, name = STATUS_MAP.get(final_status_text, ["❓", final_status_text])
             status_display = f"✅ 已触发启动 ({icon} {name})"
         else:
-            # 如果未触发启动，说明初始状态就是运行中
-            status_display = "🟢 运行正常"
+            # 未启动过则显示初始状态或默认正常
+            icon, name = STATUS_MAP.get(status_text, ["🟢", "运行正常"])
+            status_display = f"{icon} {name}"
 
-        # === 15. 根据结果分发通知 (保留原逻辑完整性) ===
+        # === 15. 分发最终通知 ===
         if is_renew_success:
             message = (f"🎉 <b>GreatHost 续期成功</b>\n\n"
                        f"🆔 <b>ID:</b> <code>{server_id}</code>\n"
@@ -392,14 +401,21 @@ def run_task():
                 with open("error_page.html", "w", encoding="utf-8") as f:
                     f.write(driver.page_source)
                 print("💾 已保存错误页面源码至 error_page.html")
-        except Exception as save_err:
-            print(f"⚠️ 源码保存失败: {save_err}")
+        except: pass
 
-        # 2. 发送 TG 通知
+        # 2. 发送的报错通知
         if "Proxy Check Failed" not in str(err):
             current_url = driver.current_url if driver else "未知"
-            send_telegram(f"🚨 <b>GreatHost 脚本报错</b>\n\n<b>错误详情:</b>\n<code>{str(err)}</code>\n\n<b>📍 报错位置:</b> {current_url}")
-             
+            
+            # 消息模板
+            error_message = (f"🚨 <b>GreatHost 脚本报错</b>\n\n"
+                             f"🆔 <b>ID:</b> <code>{server_id}</code>\n"
+                             f"❌ <b>错误详情:</b> <code>{str(err)}</code>\n"
+                             f"📍 <b>报错位置:</b> {current_url}\n"
+                             f"📅 <b>发生时间:</b> {get_now_shanghai()}\n\n"
+                             f"💡 <b>提示:</b> 请检查错误源码或代理连接。")
+            
+            send_telegram(error_message)
     finally:
         if driver:
             driver.quit()
