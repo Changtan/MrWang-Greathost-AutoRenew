@@ -275,23 +275,27 @@ def run_task():
             wait.until(EC.url_contains("/dashboard"))
             time.sleep(random.uniform(1, 4))
 
-     # === 2. 状态检查与自动开机 (针对新版小圆点 UI 优化) ===
-        print("📊 正在检查服务器实时状态...")
-        try:
-                status_indicator = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'server-status-indicator')))
-                status_text = status_indicator.get_attribute('title') or 'unknown'
+# === 2. 状态检查与自动开机 (针对新版小圆点 UI 优化) ===
+print("📊 正在检查服务器实时状态...")
+try:
+        status_indicator = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'server-status-indicator')))
+        status_text = status_indicator.get_attribute('title') or 'unknown'
 
-                if any(x in status_text.lower() for x in ['stopped', 'offline']):
-                        print("⚡ 检测到服务器离线，准备执行启动...")
+        if any(x in status_text.lower() for x in ['stopped', 'offline']):
+                print("⚡ 检测到服务器离线，准备执行启动...")
 
-                        perform_step(      
-                                driver,
-                                wait,
-                                "启动按钮",
-                                (By.CSS_SELECTOR, 'button.btn-start, .action-start'),     
-                                "button.btn-start, .action-start"
-                        )
-                        server_started = True
+                perform_step(
+                        driver,
+                        wait,
+                        "启动按钮",
+                        (By.CSS_SELECTOR, 'button.btn-start, .action-start'),
+                        "button.btn-start, .action-start"
+                )
+                server_started = True
+
+except Exception as e:
+        print(f"⚠️ 状态检查失败: {e}")
+
 
       # === 3. 点击 Billing 图标（统一封装步骤）===
         perform_step(
