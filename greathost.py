@@ -269,8 +269,17 @@ def run_task():
             status_display = f"{icon} {name}"
 
         is_success = after > before
-        is_maxed = ("5 días" in err_msg) or (before > 108 and after == before)
-                
+        #is_maxed = ("5 días" in err_msg) or (before > 108 and after == before)
+               
+        # 拆分判断逻辑以便打印 # 拆分判断逻辑以便打印
+        has_limit_msg = "5 días" in err_msg
+        has_reached_threshold = (before > 108 and after == before)
+        is_maxed = has_limit_msg or has_reached_threshold          
+        # 后台打印判定细节
+        if is_maxed:
+            reason = "抓到 '5 días' 报错文案" if has_limit_msg else "触发数值保底逻辑 (before > 108)"
+            print(f"DEBUG: 判定为上限 - 依据: {reason}")  
+         # 拆分判断逻辑以便打印  # 拆分判断逻辑以便打印     
         if is_success:
             fields = [("🆔","ID",f"<code>{server_id}</code>"),("⏰","增加时间",f"{before} ➔ {after}h"),("🚀","服务器状态",status_display)]
             send_notice("renew_success", fields)
