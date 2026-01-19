@@ -97,6 +97,7 @@ def run_task():
 
         # 2. 获取 ID [按照您的要求从 API 获取]
         res = fetch_api(driver, "/api/servers")
+        print("DEBUG /api/servers 返回：", json.dumps(res, indent=2, ensure_ascii=False))
         server_list = res.get("servers") if isinstance(res, dict) else res
         server_list = server_list or []
         target_server = next((s for s in server_list if s.get('name') == TARGET_NAME_CONFIG), None)
@@ -117,8 +118,14 @@ def run_task():
         driver.get(f"https://greathost.es/contracts/{server_id}")
         time.sleep(5)
         contract_res = fetch_api(driver, f"/api/servers/{server_id}/contract")
+        print("DEBUG /contract 返回：", json.dumps(contract_res, indent=2, ensure_ascii=False))
+        print("DEBUG serverName =", c_data.get("serverName"))
+        print("DEBUG nextRenewalDate =", r_info.get("nextRenewalDate"))
+        print("DEBUG lastRenewalDate =", r_info.get("lastRenewalDate"))
+        print("DEBUG before_h =", before_h)
         c_data = contract_res.get('contract', {})
         r_info = c_data.get('renewalInfo', {})
+      
         serverName = c_data.get("serverName", "未知名称")
         
         before_h = calculate_hours(r_info.get('nextRenewalDate'))
@@ -140,14 +147,21 @@ def run_task():
         # 5. 执行续期 POST
         print(f"🚀 正在为 {TARGET_NAME_CONFIG} 发送续期请求...")
         renew_res = fetch_api(driver, f"/api/renewal/contracts/{server_id}/renew-free", method="POST")
-        time.sleep(3)
-      
-        # 6. 处理续期后时间
-        renew_c = renew_res.get('contract', {})
-        after_h = calculate_hours(renew_c.get('renewalInfo', {}).get('nextRenewalDate'))
+
+        # 6. 循环等待后台写入 nextRenewalDate（最多等 15 秒）
+        after_h = 0
+        for _ in range(5):  # 每次等 3 秒，总共最多 15 秒
+                time.sleep(3)
+                renew_c = fetch_api(driver, f"/api/servers/{server_id}/contract").get('contract', {})
+                after_h = calculate_hours(renew_c.get('renewalInfo', {}).get('nextRenewalDate'))
+
+                print("DEBUG 循环检查 after_h =", after_h, " nextRenewalDate =", renew_c.get('renewalInfo', {}).get('nextRenewalDate'))
+                if after_h > before_h:
+                        break
 
         # 7. 智能判定判定部分 [按照 test2.js 逻辑]
         is_success = after_h > before_h
+        print("DEBUG 判定：before_h =", before_h, "after_h =", after_h, "is_success =", is_success)
         msg_str = str(renew_res.get('message', '')).lower()
         has_limit_msg = "5 días" in msg_str or "limit" in msg_str
       
