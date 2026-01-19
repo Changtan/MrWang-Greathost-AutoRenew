@@ -23,10 +23,10 @@ def now_shanghai():
     return datetime.now(ZoneInfo("Asia/Shanghai")).strftime('%Y/%m/%d %H:%M:%S')
 
 def calculate_hours(date_str):
-    """精准解析 ISO 时间并换算剩余小时数"""
+    """解析 ISO 时间字符串并换算为剩余小时数"""
     try:
         if not date_str: return 0
-        # 清洗毫秒干扰 (解决 0h 的核心逻辑)
+        # 清洗毫秒并统一格式 (解决 0h 问题)
         clean_date = re.sub(r'\.\d+Z$', 'Z', str(date_str))
         expiry = datetime.fromisoformat(clean_date.replace('Z', '+00:00'))
         now = datetime.now(timezone.utc)
@@ -42,7 +42,7 @@ def fetch_api(driver, url, method="GET"):
 def send_notice(kind, fields):
     titles = {
         "renew_success": "🎉 <b>GreatHost 续期成功</b>",
-        "cooldown": "⏳ <b>GreatHost 处于冷却/安全期</b>",
+        "cooldown": "⏳ <b>GreatHost 冷却/熔断中</b>",
         "renew_failed": "⚠️ <b>GreatHost 续期未生效</b>",
         "error": "🚨 <b>GreatHost 脚本报错</b>"
     }
@@ -68,47 +68,68 @@ def run_task():
         driver = webdriver.Chrome(options=opts, seleniumwire_options={'proxy': {'http': PROXY_URL, 'https': PROXY_URL}} if PROXY_URL else None)
         wait = WebDriverWait(driver, 25)
 
-        # 1. 登录
+        # 1. 登录流程
         driver.get("https://greathost.es/login")
         wait.until(EC.presence_of_element_located((By.NAME,"email"))).send_keys(EMAIL)
         driver.find_element(By.NAME,"password").send_keys(PASSWORD)
         driver.find_element(By.CSS_SELECTOR,"button[type='submit']").click()
         wait.until(EC.url_contains("/dashboard"))
 
-        # 2. 锁定服务器
+        # 2. 获取并锁定服务器 ID
         res = fetch_api(driver, "/api/servers")
         server_list = res.get('servers', [])
-        target_server = next((s for s in server_list if s.get('name') == TARGET_NAME_CONFIG), server_list[0] if len(server_list)==1 else None)
-        if not target_server: raise Exception("未锁定服务器")
+        target_server = next((s for s in server_list if s.get('name') == TARGET_NAME_CONFIG), None)
+        if not target_server: raise Exception(f"未找到服务器: {TARGET_NAME_CONFIG}")
         
         server_id = target_server.get('id')
         current_server_name = target_server.get('name')
 
-        # 3. 合同预检 (精准解决 0 和 冷却问题)
+        # 3. 数据采集与冷却判定
         driver.get(f"https://greathost.es/contracts/{server_id}")
         time.sleep(5) 
         
         contract_res = fetch_api(driver, f"/api/servers/{server_id}/contract")
-        # 路径穿透修复：root -> contract -> renewalInfo
+        # 路径穿透：进入 contract -> renewalInfo
         c_data = contract_res.get('contract', {})
         r_info = c_data.get('renewalInfo', {})
-        raw_date_before = r_info.get('nextRenewalDate')
         
-        before_h = calculate_hours(raw_date_before)
-        user_coins = c_data.get('userCoins', '未知') # 提取金币余额
+        # 获取核心时间数据
+        raw_date_before = r_info.get('nextRenewalDate')
+        last_renew_str = r_info.get('lastRenewalDate') # 上次续期成功的时间
+        user_coins = c_data.get('userCoins', 0)
 
-        # --- 安全熔断判定 ---
-        # 如果已经续期到 108 小时以上，直接退出，绝不发送 POST
+        # 计算状态
+        before_h = calculate_hours(raw_date_before) # 解决 0 小时问题的核心
+        
+        # --- 30 分钟硬冷却判定 ---
+        if last_renew_str:
+            clean_last = re.sub(r'\.\d+Z$', 'Z', str(last_renew_str))
+            last_time = datetime.fromisoformat(clean_last.replace('Z', '+00:00'))
+            now_time = datetime.now(timezone.utc)
+            minutes_passed = (now_time - last_time).total_seconds() / 60
+            
+            if minutes_passed < 30:
+                wait_min = int(30 - minutes_passed)
+                print(f"⏳ 冷却保护：距离上次操作仅 {int(minutes_passed)} 分钟")
+                send_notice("cooldown", [
+                    ("🖥️", "服务器", current_server_name),
+                    ("⏳", "冷却剩余", f"<code>{wait_min} 分钟</code>"),
+                    ("📊", "当前累计", f"{before_h}h")
+                ])
+                return 
+
+        # --- 120 小时上限熔断 ---
         if before_h > 108:
+            print(f"🛑 安全跳过：当前 {before_h}h 已接近上限")
             send_notice("cooldown", [
-                ("🖥️", "服务器名称", current_server_name),
+                ("🖥️", "服务器", current_server_name),
                 ("📊", "当前累计", f"{before_h}h"),
-                ("🛡️", "状态", "已近上限，安全跳过"),
-                ("💰", "金币余额", f"{user_coins}")
+                ("🛡️", "状态", "已近 120h 上限，暂无续期必要")
             ])
             return
 
-        # 4. 执行续期 POST
+        # 4. 执行续期操作
+        print(f"🚀 正在为 {current_server_name} 发送续期 POST 请求...")
         renew_res = fetch_api(driver, f"/api/renewal/contracts/{server_id}/renew-free", method="POST")
         
         # 结果解析
@@ -116,21 +137,21 @@ def run_task():
         raw_date_after = renew_c.get('renewalInfo', {}).get('nextRenewalDate')
         after_h = calculate_hours(raw_date_after)
 
-        # 补丁：API 延迟时手动显示增加
+        # 补偿显示逻辑：如果 API 成功但时间没刷新，手动显示 +12
         if (after_h == 0 or after_h <= before_h) and renew_res.get('success'):
             after_h = before_h + 12
 
-        # 5. 通知
+        # 5. 发送最终通知
         if renew_res.get('success'):
             send_notice("renew_success", [
-                ("🖥️", "服务器名称", current_server_name),
+                ("🖥️", "服务器", current_server_name),
                 ("⏰", "增加时间", f"{before_h} ➔ {after_h}h"),
                 ("💰", "当前金币", f"{user_coins}")
             ])
         else:
             send_notice("renew_failed", [
-                ("🖥️", "服务器名称", current_server_name),
-                ("💡", "原因", f"<code>{renew_res.get('message','未知错误')}</code>")
+                ("🖥️", "服务器", current_server_name),
+                ("💡", "原因", f"<code>{renew_res.get('message','接口未返回成功')}</code>")
             ])
 
     except Exception as e:
