@@ -30,7 +30,6 @@ def now_shanghai():
     return datetime.now(ZoneInfo("Asia/Shanghai")).strftime('%Y/%m/%d %H:%M:%S')
 
 def calculate_hours(date_str):
-    """健壮的时间解析，修复 0h 问题"""
     try:
         if not date_str: return 0
         # 兼容处理带毫秒的格式
@@ -97,7 +96,7 @@ def run_task():
         driver.find_element(By.CSS_SELECTOR,"button[type='submit']").click()
         wait.until(EC.url_contains("/dashboard"))
 
-        # 2. 获取服务器列表并锁定 loveMC
+        # 2. 获取服务器列表并锁定
         res = fetch_api(driver, "/api/servers")
         server_list = res.get('servers', [])
         target_server = next((s for s in server_list if s.get('name') == target_name), None)
@@ -117,7 +116,7 @@ def run_task():
         driver.get(f"https://greathost.es/contracts/{server_id}")
         time.sleep(2)
         
-        # 【修正点】改用 main (2).py 验证过的 renewal 接口，并增加 .get('contract') 层级
+        # 【修正点】验证过的 renewal 接口，并增加 .get('contract') 层级
         contract_data = fetch_api(driver, f"/api/renewal/contracts/{server_id}")
 
         print(f"DEBUG: 原始合同数据 -> {str(contract_data)[:100]}...")
