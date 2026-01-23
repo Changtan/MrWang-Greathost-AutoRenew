@@ -105,10 +105,12 @@ class GH:
 
     def get_btn(self, sid):
         self.d.get(f"https://greathost.es/contracts/{sid}")
-        time.sleep(2)
         btn = self.w.until(EC.presence_of_element_located((By.ID, "renew-free-server-btn")))
-        print(f"🔘 按钮状态: '{btn.text.strip()}'")
-        return btn.text.strip()
+        self.w.until(lambda d: btn.text.strip() != "")
+        
+        btn_text = btn.text.strip()
+        print(f"🔘 按钮状态: '{btn_text}'")
+        return btn_text
 
     def renew(self, sid):
         print(f"🚀 正在执行续期 POST...")
