@@ -8,6 +8,10 @@ on:
 jobs:
   Auto_renew_greathost:
     runs-on: ubuntu-latest
+    
+    permissions:
+      actions: write   # 允许删除工作流运行记录   
+      
     steps:
       - name: Checkout
         uses: actions/checkout@v4
