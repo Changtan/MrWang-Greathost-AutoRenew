@@ -1,14 +1,13 @@
 # GreatHost 自动续期状态
 
-🚨 **GreatHost 脚本报错**
+🎉 **GreatHost 续期成功**
 
 📛 服务器名称: zlh bun
-❌ 故障: `Message: 
-Stacktrace:
-#0 0x55eaa247ba6a <unknown>
-#1 0x55eaa1e8aab5 <unknown>
-#2 0x55eaa1edd676 <unk`
-🌐 代理状态: 已尝试直连
-📅 时间: 2026/04/17 11:36:16
+🆔 ID: `461a9e25-2eed-422a-a931-fe708a55aa16`
+⏰ 增加时间: 0 ➔ 11h
+🚀 服务器状态: ❓ unknown
+💡 提示: Servidor gratuito renovado correctamente
+🌐 落地 IP: `52.161.178.39`
+📅 时间: 2026/04/17 21:50:28
 
-> 最近更新: 2026/04/17 11:36:16
+> 最近更新: 2026/04/17 21:50:28
