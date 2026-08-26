@@ -4,9 +4,9 @@
 
 📛 服务器名称: zlh bun
 ❌ 故障: `Message: unknown error: net::ERR_CONNECTION_CLOSED
-  (Session info: chrome=151.0.7922.173)
-Stacktrac`
+  (Session info: chrome=152.0.7977.64)
+Stacktrace`
 🌐 代理状态: 已尝试直连
-📅 时间: 2026/08/25 21:01:40
+📅 时间: 2026/08/26 09:49:35
 
-> 最近更新: 2026/08/25 21:01:40
+> 最近更新: 2026/08/26 09:49:35
